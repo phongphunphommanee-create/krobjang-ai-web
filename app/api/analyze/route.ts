@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-// ✅ ขยาย Vercel function timeout เป็น 60 วินาที
 export const maxDuration = 60;
 
 let totalUsage = 0;
@@ -8,8 +7,6 @@ let totalUsage = 0;
 const MODEL_CONFIG = {
     vip: "google/gemini-2.0-flash-001",
     free_google: "gemini-2.0-flash",
-
-    // ✅ อัปเดต May 2026 — ยิงพร้อมกัน เอาอันเร็วสุด
     free_openrouter_models: [
         "openrouter/free",
         "meta-llama/llama-3.3-70b-instruct:free",
@@ -20,14 +17,12 @@ const MODEL_CONFIG = {
 
 const TIMEOUT_MS = 30000;
 
-// ✅ System prompt — บังคับ AI พูดแบบแม่ค้าไทยจริงๆ
 const SYSTEM_PROMPT = `คุณคือแม่ค้าออนไลน์ไทยที่เก่งเรื่องการตลาด TikTok Shop มีประสบการณ์ขายของออนไลน์มากกว่า 5 ปี
 พูดภาษาไทยแบบชาวบ้านทั่วไป กระชับ โดน เข้าใจง่าย อ่านแล้วอยากซื้อ
 ห้ามแปลตรงตัวจากภาษาอังกฤษเด็ดขาด
 ห้ามใช้คำแปลกหรือเป็นทางการ เช่น "อุดมสมบูรณ์" "แบบจำลอง" "ผู้ใช้บริการ" "แพลตฟอร์ม" "สำหรับคุณ" "เหมาะกับคุณ"
 เขียนเหมือนคนไทยจริงๆ พูดในชีวิตประจำวัน`;
 
-// ✅ ฟังก์ชัน unshorten ลิงก์ย่อมือถือ → ลิงก์เต็ม
 async function unshortenUrl(url: string): Promise<string> {
     if (!url.includes("vt.tiktok.com") && !url.includes("vm.tiktok.com")) {
         return url;
@@ -51,7 +46,6 @@ async function unshortenUrl(url: string): Promise<string> {
     }
 }
 
-// 🔍 ฟังก์ชันดูดข้อมูลจาก TikTok — ✅ แก้ไขให้ดึงข้อมูลครบกว่าเดิม
 async function getTikTokData(url: string) {
     try {
         const finalUrl = await unshortenUrl(url);
@@ -68,8 +62,6 @@ async function getTikTokData(url: string) {
 
             if (data.code === 0 && data.data) {
                 const d = data.data;
-
-                // ✅ รวมข้อมูลทุก field ที่มีประโยชน์ ไม่ใช่แค่ title
                 const parts: string[] = [];
 
                 if (d.title) parts.push(`ชื่อคลิป: ${d.title}`);
@@ -78,7 +70,6 @@ async function getTikTokData(url: string) {
                 if (d.author?.signature) parts.push(`โปรไฟล์ร้าน: ${d.author.signature}`);
                 if (d.music?.title) parts.push(`เพลงประกอบ: ${d.music.title}`);
 
-                // ✅ ดึง hashtag จาก desc
                 if (d.desc) {
                     const tags = (d.desc.match(/#\S+/g) || []).join(" ");
                     if (tags) parts.push(`แฮชแท็กในคลิป: ${tags}`);
@@ -86,7 +77,6 @@ async function getTikTokData(url: string) {
 
                 const result = parts.join("\n");
                 console.log("📦 TikTok data ที่ดึงได้:\n", result);
-
                 return result || null;
             }
 
@@ -104,7 +94,6 @@ async function getTikTokData(url: string) {
     }
 }
 
-// ✅ ฟังก์ชันเรียก AI API พร้อม timeout + system prompt
 async function callAPI(apiKey: string, modelName: string, prompt: string): Promise<string | null> {
     const isOpenRouter = apiKey.startsWith("sk-or-");
 
@@ -169,7 +158,6 @@ async function callAPI(apiKey: string, modelName: string, prompt: string): Promi
     }
 }
 
-// ✅ แกะ JSON ออกจาก text
 function extractJSON(text: string): object | null {
     const s = text.indexOf('{');
     const e = text.lastIndexOf('}');
@@ -185,11 +173,9 @@ export async function POST(req: Request) {
     try {
         const { productUrl, isVIP } = await req.json();
 
-        // 1. แปลงลิงก์ + ดึงข้อมูลสินค้า
         const productText = await getTikTokData(productUrl);
         if (!productText) throw new Error("PRODUCT_NOT_FOUND");
 
-        // 2. เตรียมกุญแจ
         let keysToTry: string[] = [];
         if (isVIP) {
             keysToTry = [process.env.VIP_API_KEY || ""];
@@ -198,20 +184,26 @@ export async function POST(req: Request) {
             const allKeys = keyString.split(",").map(k => k.trim()).filter(k => k !== "");
             const openRouterKeys = allKeys.filter(k => k.startsWith("sk-or-"));
             const googleKeys = allKeys.filter(k => !k.startsWith("sk-or-"));
-            // Google ขึ้นก่อน ถ้า quota หมดค่อยใช้ OpenRouter
-            keysToTry = [...openRouterKeys, ...googleKeys];
+            // ✅ แก้ไข: Google ขึ้นก่อน ถ้า quota หมดค่อยใช้ OpenRouter
+            keysToTry = [...googleKeys, ...openRouterKeys];
         }
 
         if (keysToTry.length === 0 || !keysToTry[0]) throw new Error("KEYS_MISSING");
 
         console.log(`🔑 กุญแจ ${keysToTry.length} ดอก:`, keysToTry.map(k => k.substring(0, 10) + "..."));
 
-        // ✅ prompt ส่งข้อมูลคลิปครบๆ ให้ AI
+        // ✅ Prompt ที่แก้ไขแล้ว — บังคับ AI ใช้ข้อมูลจริงเท่านั้น
         const prompt = `วิเคราะห์สินค้าจากข้อมูลคลิป TikTok นี้:
 
 ${productText}
 
-สร้างแคปชั่นขายของจากข้อมูลจริงข้างต้นเท่านั้น ห้ามเดาหรือแต่งขึ้นมาเอง
+กฎเหล็กที่ต้องทำตามเสมอ:
+1. ใช้ข้อมูลจากคลิปข้างต้นเท่านั้น ห้ามเดาหรือแต่งขึ้นเอง
+2. ชื่อสินค้าและแบรนด์ต้อง copy ตรงๆ จากข้อมูล ห้ามสะกดใหม่หรือแปลงเสียงเอง
+3. จุดเด่นต้องมีในคลิปจริงเท่านั้น ห้ามเขียนสิ่งที่ไม่เกี่ยวกับสินค้า
+4. ห้ามใช้ประโยคเชิงลบ เช่น "ไม่มีกลิ่นเหม็น" ให้เปลี่ยนเป็นบวก เช่น "กลิ่นหอมสดชื่น"
+5. Hashtag ต้องเป็นที่คนไทยค้นหาจริงบน TikTok ไม่ใช่แต่งขึ้นมาเอง
+
 ตอบเฉพาะ JSON นี้เท่านั้น ห้ามมีข้อความอื่นนอก JSON:
 {
   "highlights": "• จุดเด่นข้อ1\\n• จุดเด่นข้อ2\\n• จุดเด่นข้อ3",
@@ -222,7 +214,6 @@ ${productText}
 
         let finalResult = null;
 
-        // 3. ระบบวนลูปสู้ชีวิต
         for (const apiKey of keysToTry) {
             if (finalResult) break;
             const isOpenRouter = apiKey.startsWith("sk-or-");
@@ -234,7 +225,6 @@ ${productText}
                 if (finalResult) console.log("✅ สำเร็จ! VIP");
 
             } else if (isOpenRouter) {
-                // ✅ ยิงพร้อมกันทุก model เอาอันที่ตอบก่อน
                 console.log(`🚀 [FREE-OR] ยิงพร้อมกัน ${MODEL_CONFIG.free_openrouter_models.length} models...`);
                 const results = await Promise.allSettled(
                     MODEL_CONFIG.free_openrouter_models.map(modelName =>
