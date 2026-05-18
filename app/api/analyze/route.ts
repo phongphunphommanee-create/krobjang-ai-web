@@ -51,7 +51,7 @@ async function unshortenUrl(url: string): Promise<string> {
     }
 }
 
-// 🔍 ฟังก์ชันดูดข้อมูลจาก TikTok
+// 🔍 ฟังก์ชันดูดข้อมูลจาก TikTok — ✅ แก้ไขให้ดึงข้อมูลครบกว่าเดิม
 async function getTikTokData(url: string) {
     try {
         const finalUrl = await unshortenUrl(url);
@@ -65,11 +65,34 @@ async function getTikTokData(url: string) {
             );
             clearTimeout(timeout);
             const data = await response.json();
-            if (data.code === 0 && data.data && data.data.title) {
-                console.log("📦 TikTok title:", data.data.title);
-                return data.data.title;
+
+            if (data.code === 0 && data.data) {
+                const d = data.data;
+
+                // ✅ รวมข้อมูลทุก field ที่มีประโยชน์ ไม่ใช่แค่ title
+                const parts: string[] = [];
+
+                if (d.title) parts.push(`ชื่อคลิป: ${d.title}`);
+                if (d.desc && d.desc !== d.title) parts.push(`คำบรรยาย: ${d.desc}`);
+                if (d.author?.nickname) parts.push(`เจ้าของร้าน: ${d.author.nickname}`);
+                if (d.author?.signature) parts.push(`โปรไฟล์ร้าน: ${d.author.signature}`);
+                if (d.music?.title) parts.push(`เพลงประกอบ: ${d.music.title}`);
+
+                // ✅ ดึง hashtag จาก desc
+                if (d.desc) {
+                    const tags = (d.desc.match(/#\S+/g) || []).join(" ");
+                    if (tags) parts.push(`แฮชแท็กในคลิป: ${tags}`);
+                }
+
+                const result = parts.join("\n");
+                console.log("📦 TikTok data ที่ดึงได้:\n", result);
+
+                return result || null;
             }
+
+            console.log("⚠️ tikwm ตอบกลับแต่ไม่มีข้อมูล:", JSON.stringify(data).substring(0, 200));
             return null;
+
         } catch (err: any) {
             clearTimeout(timeout);
             if (err.name === "AbortError") console.log("⏱️ TikTok API timeout");
@@ -183,8 +206,12 @@ export async function POST(req: Request) {
 
         console.log(`🔑 กุญแจ ${keysToTry.length} ดอก:`, keysToTry.map(k => k.substring(0, 10) + "..."));
 
-        const prompt = `วิเคราะห์สินค้านี้: "${productText}"
+        // ✅ prompt ส่งข้อมูลคลิปครบๆ ให้ AI
+        const prompt = `วิเคราะห์สินค้าจากข้อมูลคลิป TikTok นี้:
 
+${productText}
+
+สร้างแคปชั่นขายของจากข้อมูลจริงข้างต้นเท่านั้น ห้ามเดาหรือแต่งขึ้นมาเอง
 ตอบเฉพาะ JSON นี้เท่านั้น ห้ามมีข้อความอื่นนอก JSON:
 {
   "highlights": "• จุดเด่นข้อ1\\n• จุดเด่นข้อ2\\n• จุดเด่นข้อ3",
