@@ -124,7 +124,7 @@ export default function Home() {
 
     try {
       alert("กำลังตรวจสอบรหัส VIP กรุณารอสักครู่นะคะ...");
-      const res = await fetch("https://script.google.com/macros/s/AKfycby_p5WC3SRfLOg1PGAS8zUQoVK9Q7oYnqRE0gqzyAxPLm6aLt1_R3Us_P_YFAS4mi50VQ/exec", {
+      const res = await fetch("https://script.google.com/macros/s/AKfycbx8hstNylnPcp0s-gDyOOBurS5DxFX1xFYPwY2hLyCSIUwG7dUGcgtiYzOC3aHZkUz5/exec", {
         method: "POST",
         body: JSON.stringify({ action: "verify", key: licenseKey })
       });
